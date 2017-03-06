@@ -77,6 +77,23 @@ __global__ void move_gpu (particle_t * particles, int n, double size)
 
 }
 
+__global__ init_bins(bin *bin_rtn, int bin_dim){
+    for(int i = 0; i< bin_dim; i++){
+        for (int j = 0; j < bin_dim; j++){
+            bin_rtn[i*bin_dim + j].capacity = 30;
+            bin_rtn[i*bin_dim + j].num_particles = 0;
+            bin_rtn[i*bin_dim + j].particles = (int *) cudaMalloc((void **) &bin_rtn, 30 * sizeof(int));
+            if (bin_rtn[i*bin_dim + j].particles  == 0)
+                {
+                    printf("ERROR: Out of memory\n");
+                    exit(1);
+                }
+        }
+    }
+}
+
+__global__ assign_particles_to_bin(int n, particle_t *particles, double bin_size, int bin_dim){
+
 
 
 int main( int argc, char **argv )
@@ -117,11 +134,26 @@ int main( int argc, char **argv )
     cudaThreadSynchronize();
     copy_time = read_timer( ) - copy_time;
     
+
+
     //
     //  simulate a number of time steps
     //
     cudaThreadSynchronize();
     double simulation_time = read_timer( );
+
+    int blks = (n + NUM_THREADS - 1) / NUM_THREADS;
+
+    int bin_dim = size/cutoff;
+    bin bins[bin_dim*bin_dim];
+    int num_bins = bin_dim*bin_dim;
+    init_bins(bins,bin_dim);
+    double bin_size = size/bin_dim;
+
+
+
+
+
 
     for( int step = 0; step < NSTEPS; step++ )
     {
@@ -129,7 +161,6 @@ int main( int argc, char **argv )
         //  compute forces
         //
 
-	int blks = (n + NUM_THREADS - 1) / NUM_THREADS;
 	compute_forces_gpu <<< blks, NUM_THREADS >>> (d_particles, n);
         
         //
