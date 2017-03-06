@@ -14,11 +14,11 @@ extern double size;
 //  benchmarking program
 //
 
-__global__ void init_bins(bin_t *bins, int num_bin){
+__global__ void init_bins_gpu(bin_t *bins, int num_bin){
     int tid = threadIdx.x + blockIdx.x * blockDim.x;
     if (tid >= num_bin) return;
 
-    bins[tid].head = NULL;
+    bins[tid].head = -1;
 }
 
 __global__ void assign_particles_to_bins_gpu(particle_t *particles, bin_t *bins, int n, int bin_dim) 
@@ -183,9 +183,9 @@ int main( int argc, char **argv )
     for( int step = 0; step < NSTEPS; step++ )
     { 
       //  
-      // Initialize/ re-initialize bins
+      // Initialize/reinitialize bins
       //
-      init_bins<<<bin_blks, NUM_THREADS>>> (d_bins, num_bins);
+      init_bins_gpu<<< bin_blks, NUM_THREADS >>> (d_bins, num_bins);
 
       //
       // Assign particles to bins
