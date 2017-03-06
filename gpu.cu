@@ -77,7 +77,7 @@ __global__ void move_gpu (particle_t * particles, int n, double size)
 
 }
 
-__global__ init_bins(bin *bin_rtn, int bin_dim){
+__global__ void init_bins(bin *bin_rtn, int bin_dim){
     for(int i = 0; i< bin_dim; i++){
         for (int j = 0; j < bin_dim; j++){
             bin_rtn[i*bin_dim + j].capacity = 30;
@@ -92,7 +92,7 @@ __global__ init_bins(bin *bin_rtn, int bin_dim){
     }
 }
 
-__global__ assign_particles_to_bin(int n, particle_t *particles, double bin_size, int bin_dim){
+// __global__ assign_particles_to_bin(int n, particle_t *particles, double bin_size, int bin_dim){
 
 
 
