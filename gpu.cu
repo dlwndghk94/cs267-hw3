@@ -185,21 +185,25 @@ int main( int argc, char **argv )
       //  
       // Initialize/reinitialize bins
       //
+      printf("step %i, initialize bins", step);
       init_bins_gpu<<< bin_blks, NUM_THREADS >>> (d_bins, num_bins);
 
       //
       // Assign particles to bins
       //  
+      printf("step %i, assign particles to bins", step);
       assign_particles_to_bins_gpu <<< blks, NUM_THREADS >>> (d_particles, d_bins, n, bin_dim);    
 
       //
       //  compute forces
       //
+      printf("step %i, compute forces", step);
 	    compute_forces_gpu <<< blks, NUM_THREADS >>> (d_particles, d_bins, n, bin_dim);
         
       //
       //  move particles
       //
+      printf("step %i, move particles", step);
 	    move_gpu <<< blks, NUM_THREADS >>> (d_particles, n, size);
         
       //
