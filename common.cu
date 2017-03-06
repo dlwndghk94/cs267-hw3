@@ -75,7 +75,7 @@ void init_particles( int n, particle_t *p )
         p[i].vy = drand48()*2-1;
 
         // initialize next particles to NULL
-        p[i].next = NULL;
+        p[i].next = -1;
     }
     free( shuffle );
 }

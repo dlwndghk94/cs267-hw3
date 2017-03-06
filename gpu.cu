@@ -15,24 +15,24 @@ extern double size;
 //
 
 __global__ void init_bins(bin_t *bins, int num_bin){
-    tid = threadIdx.x + blockIdx.x * blockDim.x;
+    int tid = threadIdx.x + blockIdx.x * blockDim.x;
     if (tid >= num_bin) return;
 
     bins[tid].head = NULL;
 }
 
-__global__ void assign_particles_to_bins_gpu(particle_t *particles, bin_t *bins) 
+__global__ void assign_particles_to_bins_gpu(particle_t *particles, bin_t *bins, int n, int bin_dim) 
 {
   int tid = threadIdx.x + blockIdx.x * blockDim.x;
   if (tid >= n) return;
 
   // find which bin the particle belongs to
-  int i = particle.x/dim;
-  int j = particle.y/dim;
-  int idx = j*dim + i; 
+  int i = particles[tid].x / bin_dim;
+  int j = particles[tid].y / bin_dim;
+  int idx = j*bin_dim + i; 
 
   // assign particles
-  bins[idx].head.next = atomicExch(&bins[idx].head, &particles[tid]);
+  particles[tid].next = atomicExch(&bins[idx].head, tid);
 }
 
 
@@ -167,7 +167,7 @@ int main( int argc, char **argv )
       //
       // Assign particles to bins
       //  
-      assign_particles_to_bins_gpu <<< blks, NUM_THREADS >>> (d_particles, d_bins);    
+      assign_particles_to_bins_gpu <<< blks, NUM_THREADS >>> (d_particles, d_bins, n, bin_dim);    
 
       //
       //  compute forces

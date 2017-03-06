@@ -19,7 +19,7 @@ const int SAVEFREQ = 10;
 //
 // particle data structure
 //
-typedef struct 
+typedef struct
 {
   double x;
   double y;
@@ -27,11 +27,11 @@ typedef struct
   double vy;
   double ax;
   double ay;
-  particle_t *next;
+  int  next;
 } particle_t;
 
 typedef struct {
-  particle_t *head; // point to the first particle in the bin
+  int head; // point to the first particle in the bin
 } bin_t;
 
 
