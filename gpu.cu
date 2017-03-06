@@ -56,16 +56,39 @@ __device__ void apply_force_gpu(particle_t &particle, particle_t &neighbor)
 
 }
 
-__global__ void compute_forces_gpu(particle_t * particles, int n)
+__device__ void compute_forces_particle_and_bin(int particle_idx, int bin_idx, particle_t *particles, bin_t *bins)
+{
+  int head_idx = bins[bin_idx].head;
+  while (head_idx != -1) {
+    apply_force_gpu(particles[particle_idx], particles[head_idx]);
+    head_idx = particles[head_idx].next;
+  }
+}
+
+__global__ void compute_forces_gpu(particle_t *particles, bin_t *bins, int n, int bin_dim)
 {
   // Get thread (particle) ID
   int tid = threadIdx.x + blockIdx.x * blockDim.x;
   if(tid >= n) return;
 
   particles[tid].ax = particles[tid].ay = 0;
-  for(int j = 0; j < n ; j++)
-    apply_force_gpu(particles[tid], particles[j]);
 
+  // find which bin the particle belongs to
+  int i = particles[tid].x / bin_dim;
+  int j = particles[tid].y / bin_dim;
+
+  // find up, down, left, right, curr bins
+  int lower_x_lim = (i > 0) ? (i - 1) : 0;
+  int lower_y_lim = (j > 0) ? (j - 1) : 0;
+  int upper_x_lim = (i < bin_dim - 1) ? (i + 1) : (bin_dim - 1);
+  int upper_y_lim = (j < bin_dim - 1) ? (j + 1) : (bin_dim - 1);
+
+  // apply force between particle and all particles in surrounding bins
+  for (int yy = lower_y_lim; yy <= upper_y_lim; yy++) {
+    for (int xx = lower_x_lim; xx <= upper_x_lim; xx++) {
+      compute_forces_particle_and_bin(tid, yy*bin_dim+xx, particles, bins);
+    }
+  }
 }
 
 __global__ void move_gpu (particle_t * particles, int n, double size)
@@ -172,7 +195,7 @@ int main( int argc, char **argv )
       //
       //  compute forces
       //
-	    compute_forces_gpu <<< blks, NUM_THREADS >>> (d_particles, n);
+	    compute_forces_gpu <<< blks, NUM_THREADS >>> (d_particles, d_bins, n, bin_dim);
         
       //
       //  move particles
