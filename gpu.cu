@@ -6,11 +6,35 @@
 #include "common.h"
 
 #define NUM_THREADS 256
+#define cutoff  0.01
+
 
 extern double size;
 //
 //  benchmarking program
 //
+
+__global__ void init_bins(bin_t *bins, int num_bin){
+    tid = threadIdx.x + blockIdx.x * blockDim.x;
+    if (tid >= num_bin) return;
+
+    bins[tid].head = NULL;
+}
+
+__global__ void assign_particles_to_bins_gpu(particle_t *particles, bin_t *bins) 
+{
+  int tid = threadIdx.x + blockIdx.x * blockDim.x;
+  if (tid >= n) return;
+
+  // find which bin the particle belongs to
+  int i = particle.x/dim;
+  int j = particle.y/dim;
+  int idx = j*dim + i; 
+
+  // assign particles
+  bins[idx].head.next = atomicExch(&bins[idx].head, &particles[tid]);
+}
+
 
 __device__ void apply_force_gpu(particle_t &particle, particle_t &neighbor)
 {
@@ -39,7 +63,7 @@ __global__ void compute_forces_gpu(particle_t * particles, int n)
   if(tid >= n) return;
 
   particles[tid].ax = particles[tid].ay = 0;
-  for(int j = 0 ; j < n ; j++)
+  for(int j = 0; j < n ; j++)
     apply_force_gpu(particles[tid], particles[j]);
 
 }
@@ -75,24 +99,9 @@ __global__ void move_gpu (particle_t * particles, int n, double size)
         p->vy = -(p->vy);
     }
 
-}
+    p->next = NULL;
 
-__global__ init_bins(bin *bin_rtn, int bin_dim){
-    for(int i = 0; i< bin_dim; i++){
-        for (int j = 0; j < bin_dim; j++){
-            bin_rtn[i*bin_dim + j].capacity = 30;
-            bin_rtn[i*bin_dim + j].num_particles = 0;
-            bin_rtn[i*bin_dim + j].particles = (int *) cudaMalloc((void **) &bin_rtn, 30 * sizeof(int));
-            if (bin_rtn[i*bin_dim + j].particles  == 0)
-                {
-                    printf("ERROR: Out of memory\n");
-                    exit(1);
-                }
-        }
-    }
 }
-
-__global__ assign_particles_to_bin(int n, particle_t *particles, double bin_size, int bin_dim){
 
 
 
@@ -133,50 +142,54 @@ int main( int argc, char **argv )
 
     cudaThreadSynchronize();
     copy_time = read_timer( ) - copy_time;
+
+    // setup memory for bins for GPU
+    int bin_dim = size/cutoff; // the dimension (size) of a bin
+    int num_bins = bin_dim * bin_dim;
+    bin_t *d_bins;
+    cudaMalloc((void **) &d_bins, num_bins * sizeof(bin_t));
     
-
-
     //
     //  simulate a number of time steps
     //
     cudaThreadSynchronize();
     double simulation_time = read_timer( );
 
-    int blks = (n + NUM_THREADS - 1) / NUM_THREADS;
-
-    int bin_dim = size/cutoff;
-    bin bins[bin_dim*bin_dim];
-    int num_bins = bin_dim*bin_dim;
-    init_bins(bins,bin_dim);
-    double bin_size = size/bin_dim;
-
-
-
-
-
-
+    int bin_blks = (num_bins + NUM_THREADS - 1) / NUM_THREADS;  // GPU block for bins
+    int blks = (n + NUM_THREADS - 1) / NUM_THREADS;             // GPU block for particles
     for( int step = 0; step < NSTEPS; step++ )
-    {
-        //
-        //  compute forces
-        //
+    { 
+      //  
+      // Initialize/ re-initialize bins
+      //
+      init_bins<<<bin_blks, NUM_THREADS>>> (d_bins, num_bins);
 
-	compute_forces_gpu <<< blks, NUM_THREADS >>> (d_particles, n);
+      //
+      // Assign particles to bins
+      //  
+      assign_particles_to_bins_gpu <<< blks, NUM_THREADS >>> (d_particles, d_bins);    
+
+      //
+      //  compute forces
+      //
+	    compute_forces_gpu <<< blks, NUM_THREADS >>> (d_particles, n);
         
-        //
-        //  move particles
-        //
-	move_gpu <<< blks, NUM_THREADS >>> (d_particles, n, size);
+      //
+      //  move particles
+      //
+	    move_gpu <<< blks, NUM_THREADS >>> (d_particles, n, size);
         
-        //
-        //  save if necessary
-        //
-        if( fsave && (step%SAVEFREQ) == 0 ) {
+      //
+      //  save if necessary
+      //
+      if( fsave && (step%SAVEFREQ) == 0 ) {
 	    // Copy the particles back to the CPU
-            cudaMemcpy(particles, d_particles, n * sizeof(particle_t), cudaMemcpyDeviceToHost);
-            save( fsave, n, particles);
-	}
+        cudaMemcpy(particles, d_particles, n * sizeof(particle_t), cudaMemcpyDeviceToHost);
+        save( fsave, n, particles);
+	    }
+
     }
+
     cudaThreadSynchronize();
     simulation_time = read_timer( ) - simulation_time;
     

@@ -27,7 +27,13 @@ typedef struct
   double vy;
   double ax;
   double ay;
+  particle_t *next;
 } particle_t;
+
+typedef struct {
+  particle_t *head; // point to the first particle in the bin
+} bin_t;
+
 
 //
 //  timing routines
@@ -56,10 +62,5 @@ int find_option( int argc, char **argv, const char *option );
 int read_int( int argc, char **argv, const char *option, int default_value );
 char *read_string( int argc, char **argv, const char *option, char *default_value );
 
-typedef struct{
-	int capacity;
-	int num_particles;
-	int *particles;
-} bin;
 
 #endif
