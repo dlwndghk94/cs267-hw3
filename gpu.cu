@@ -203,7 +203,6 @@ int main( int argc, char **argv )
 	    compute_forces_gpu <<< blks, NUM_THREADS >>> (d_particles, d_bins, n, bin_dim);
       cudaThreadSynchronize();
 
-        
       //
       //  move particles
       //
