@@ -185,26 +185,31 @@ int main( int argc, char **argv )
       //  
       // Initialize/reinitialize bins
       //
-      printf("step %i, initialize bins necessary\n", step);
+      //printf("step %i, initialize bins necessary\n", step);
       init_bins_gpu<<< bin_blks, NUM_THREADS >>> (d_bins, num_bins);
+      cudaThreadSynchronize();
 
       //
       // Assign particles to bins
       //  
-      printf("step %i, assign particles to bins\n", step);
+      //printf("step %i, assign particles to bins\n", step);
       assign_particles_to_bins_gpu <<< blks, NUM_THREADS >>> (d_particles, d_bins, n, bin_dim);    
+      cudaThreadSynchronize();
 
       //
       //  compute forces
       //
-      printf("step %i, compute forces\n", step);
+      //printf("step %i, compute forces\n", step);
 	    compute_forces_gpu <<< blks, NUM_THREADS >>> (d_particles, d_bins, n, bin_dim);
+      cudaThreadSynchronize();
+
         
       //
       //  move particles
       //
-      printf("step %i, move particles\n", step);
+      //printf("step %i, move particles\n", step);
 	    move_gpu <<< blks, NUM_THREADS >>> (d_particles, n, size);
+      cudaThreadSynchronize();
         
       //
       //  save if necessary
