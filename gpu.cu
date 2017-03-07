@@ -178,6 +178,12 @@ int main( int argc, char **argv )
     cudaThreadSynchronize();
     double simulation_time = read_timer( );
 
+    double init_bins_time = 0;
+    double assign_particles_time = 0;
+    double compute_forces_time = 0;
+    double move_gpu_time = 0;
+    double t0;
+
     int bin_blks = (num_bins + NUM_THREADS - 1) / NUM_THREADS;  // GPU block for bins
     int blks = (n + NUM_THREADS - 1) / NUM_THREADS;             // GPU block for particles
     for( int step = 0; step < NSTEPS; step++ )
@@ -186,29 +192,37 @@ int main( int argc, char **argv )
       // Initialize/reinitialize bins
       //
       //printf("step %i, initialize bins necessary\n", step);
+      t0 = read_timer();
       init_bins_gpu<<< bin_blks, NUM_THREADS >>> (d_bins, num_bins);
-      cudaThreadSynchronize();
+      //cudaThreadSynchronize();
+      init_bins_time+= read_timer() - t0;
 
       //
       // Assign particles to bins
       //  
       //printf("step %i, assign particles to bins\n", step);
+      t0 = read_timer();
       assign_particles_to_bins_gpu <<< blks, NUM_THREADS >>> (d_particles, d_bins, n, bin_dim);    
-      cudaThreadSynchronize();
+      //cudaThreadSynchronize();
+      assign_particles_time+= read_timer() - t0;
 
       //
       //  compute forces
       //
       //printf("step %i, compute forces\n", step);
-	    compute_forces_gpu <<< blks, NUM_THREADS >>> (d_particles, d_bins, n, bin_dim);
-      cudaThreadSynchronize();
+      t0 = read_timer();
+	  compute_forces_gpu <<< blks, NUM_THREADS >>> (d_particles, d_bins, n, bin_dim);
+      //cudaThreadSynchronize();
+  	  compute_forces_time += read_timer() - t0;
 
       //
       //  move particles
       //
       //printf("step %i, move particles\n", step);
-	    move_gpu <<< blks, NUM_THREADS >>> (d_particles, n, size);
-      cudaThreadSynchronize();
+      t0 = read_timer();
+	  move_gpu <<< blks, NUM_THREADS >>> (d_particles, n, size);
+      //cudaThreadSynchronize();
+      move_gpu_time += read_timer() - t0;
         
       //
       //  save if necessary
@@ -222,8 +236,13 @@ int main( int argc, char **argv )
     }
 
     cudaThreadSynchronize();
+  
+    printf("init_bins_time = %f\n", init_bins_time);
+    printf("assign_particles_time = %f\n", assign_particles_time);
+    printf("compute_forces_time = %f\n", compute_forces_time);
+    printf("move_gpu_time = %f\n\n", move_gpu_time);
+
     simulation_time = read_timer( ) - simulation_time;
-    
     printf( "CPU-GPU copy time = %g seconds\n", copy_time);
     printf( "n = %d, simulation time = %g seconds\n", n, simulation_time );
     
