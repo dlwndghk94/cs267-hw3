@@ -21,14 +21,14 @@ __global__ void init_bins_gpu(bin_t *bins, int num_bin){
     bins[tid].head = -1;
 }
 
-__global__ void assign_particles_to_bins_gpu(particle_t *particles, bin_t *bins, int n, int bin_dim) 
+__global__ void assign_particles_to_bins_gpu(particle_t *particles, bin_t *bins, int n, double bin_size, int bin_dim) 
 {
   int tid = threadIdx.x + blockIdx.x * blockDim.x;
   if (tid >= n) return;
 
   // find which bin the particle belongs to
-  int i = particles[tid].x / bin_dim;
-  int j = particles[tid].y / bin_dim;
+  int i = particles[tid].x / bin_size;
+  int j = particles[tid].y / bin_size;
   int idx = j*bin_dim + i; 
 
   // assign particles
@@ -56,7 +56,7 @@ __device__ void apply_force_gpu(particle_t &particle, particle_t &neighbor)
 
 }
 
-__device__ void compute_forces_particle_and_bin(int particle_idx, int bin_idx, particle_t *particles, bin_t *bins)
+__device__ void compute_forces_particle_and_bin(int particle_idx, int bin_idx, particle_t *particles, bin_t *bins, int n)
 {
   int head_idx = bins[bin_idx].head;
   while (head_idx != -1) {
@@ -65,7 +65,7 @@ __device__ void compute_forces_particle_and_bin(int particle_idx, int bin_idx, p
   }
 }
 
-__global__ void compute_forces_gpu(particle_t *particles, bin_t *bins, int n, int bin_dim)
+__global__ void compute_forces_gpu(particle_t *particles, bin_t *bins, int n, double bin_size, int bin_dim)
 {
   // Get thread (particle) ID
   int tid = threadIdx.x + blockIdx.x * blockDim.x;
@@ -74,8 +74,8 @@ __global__ void compute_forces_gpu(particle_t *particles, bin_t *bins, int n, in
   particles[tid].ax = particles[tid].ay = 0;
 
   // find which bin the particle belongs to
-  int i = particles[tid].x / bin_dim;
-  int j = particles[tid].y / bin_dim;
+  int i = particles[tid].x / bin_size;
+  int j = particles[tid].y / bin_size;
 
   // find up, down, left, right, curr bins
   int lower_x_lim = (i > 0) ? (i - 1) : 0;
@@ -86,7 +86,7 @@ __global__ void compute_forces_gpu(particle_t *particles, bin_t *bins, int n, in
   // apply force between particle and all particles in surrounding bins
   for (int yy = lower_y_lim; yy <= upper_y_lim; yy++) {
     for (int xx = lower_x_lim; xx <= upper_x_lim; xx++) {
-      compute_forces_particle_and_bin(tid, yy*bin_dim+xx, particles, bins);
+      compute_forces_particle_and_bin(tid, yy*bin_dim + xx, particles, bins, n);
     }
   }
 }
@@ -122,7 +122,7 @@ __global__ void move_gpu (particle_t * particles, int n, double size)
         p->vy = -(p->vy);
     }
 
-    p->next = NULL;
+    p->next = -1;
 
 }
 
@@ -167,22 +167,23 @@ int main( int argc, char **argv )
     copy_time = read_timer( ) - copy_time;
 
     // setup memory for bins for GPU
-    int bin_dim = size/cutoff; // the dimension (size) of a bin
+    int bin_dim = size/cutoff; // the number of bins/row
+    double bin_size = size/bin_dim; // length of a bin
     int num_bins = bin_dim * bin_dim;
     bin_t *d_bins;
     cudaMalloc((void **) &d_bins, num_bins * sizeof(bin_t));
-    
+
     //
     //  simulate a number of time steps
     //
     cudaThreadSynchronize();
     double simulation_time = read_timer( );
 
-    double init_bins_time = 0;
-    double assign_particles_time = 0;
-    double compute_forces_time = 0;
-    double move_gpu_time = 0;
-    double t0;
+    // double init_bins_time = 0;
+    // double assign_particles_time = 0;
+    // double compute_forces_time = 0;
+    // double move_gpu_time = 0;
+    // double t0;
 
     int bin_blks = (num_bins + NUM_THREADS - 1) / NUM_THREADS;  // GPU block for bins
     int blks = (n + NUM_THREADS - 1) / NUM_THREADS;             // GPU block for particles
@@ -192,37 +193,37 @@ int main( int argc, char **argv )
       // Initialize/reinitialize bins
       //
       //printf("step %i, initialize bins necessary\n", step);
-      t0 = read_timer();
+      //t0 = read_timer();
       init_bins_gpu<<< bin_blks, NUM_THREADS >>> (d_bins, num_bins);
       //cudaThreadSynchronize();
-      init_bins_time+= read_timer() - t0;
+      //init_bins_time+= read_timer() - t0;
 
       //
       // Assign particles to bins
       //  
       //printf("step %i, assign particles to bins\n", step);
-      t0 = read_timer();
-      assign_particles_to_bins_gpu <<< blks, NUM_THREADS >>> (d_particles, d_bins, n, bin_dim);    
+      //t0 = read_timer();
+      assign_particles_to_bins_gpu <<< blks, NUM_THREADS >>> (d_particles, d_bins, n, bin_size, bin_dim);    
       //cudaThreadSynchronize();
-      assign_particles_time+= read_timer() - t0;
+      //assign_particles_time+= read_timer() - t0;
 
       //
       //  compute forces
       //
       //printf("step %i, compute forces\n", step);
-      t0 = read_timer();
-	  compute_forces_gpu <<< blks, NUM_THREADS >>> (d_particles, d_bins, n, bin_dim);
+      //t0 = read_timer();
+	  compute_forces_gpu <<< blks, NUM_THREADS >>> (d_particles, d_bins, n, bin_size, bin_dim);
       //cudaThreadSynchronize();
-  	  compute_forces_time += read_timer() - t0;
+  	  //compute_forces_time += read_timer() - t0;
 
       //
       //  move particles
       //
       //printf("step %i, move particles\n", step);
-      t0 = read_timer();
+      //t0 = read_timer();
 	  move_gpu <<< blks, NUM_THREADS >>> (d_particles, n, size);
       //cudaThreadSynchronize();
-      move_gpu_time += read_timer() - t0;
+      //move_gpu_time += read_timer() - t0;
         
       //
       //  save if necessary
@@ -237,10 +238,10 @@ int main( int argc, char **argv )
 
     cudaThreadSynchronize();
   
-    printf("init_bins_time = %f\n", init_bins_time);
-    printf("assign_particles_time = %f\n", assign_particles_time);
-    printf("compute_forces_time = %f\n", compute_forces_time);
-    printf("move_gpu_time = %f\n\n", move_gpu_time);
+    // printf("init_bins_time = %f\n", init_bins_time);
+    // printf("assign_particles_time = %f\n", assign_particles_time);
+    // printf("compute_forces_time = %f\n", compute_forces_time);
+    // printf("move_gpu_time = %f\n\n", move_gpu_time);
 
     simulation_time = read_timer( ) - simulation_time;
     printf( "CPU-GPU copy time = %g seconds\n", copy_time);
